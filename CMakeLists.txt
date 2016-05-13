@@ -37,8 +37,28 @@ set(HFUSE "0xF3")
 set(EFUSE "0x99")
 set(LFUSE "0x5E")
 
+# Specify avrdude programmer flags
+#set(PROGRAMMER avrispmkII)
+set(PROGRAMMER avr109)
+
+#set(PORT usb)
+set(PORT /dev/ttyACM0)
+
+set(BAUD 57600)
+set(CONF /etc/avrdude.conf)
+
+set(AVRDUDE_FLAGS
+#    -F 
+#    -C ${CONF} 
+    -c ${PROGRAMMER} 
+    -p ${MCU} 
+    -P ${PORT} 
+#    -b ${BAUD} 
+    -v
+)
+
 ################################################################################
-# SYSTEM-SPECIFIC CMAKE OPTIONS (DO NOT MODIFY BELOW THIS POINT)
+# SYSTEM-SPECIFIC CMAKE OPTIONS 
 ################################################################################
 
 # Set cross compilation information
@@ -81,37 +101,31 @@ set(CMAKE_EXE_LINKER_FLAGS)
 
 # set bin folder for convenience
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+# shorter variable name for even more convenience
+set(ODIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 
 # main object build target
 add_executable(${ELF}.obj ${SOURCES})
 
-# Specify avrdude programmer flags
-#set(PROGRAMMER avrispmkII)
-set(PROGRAMMER avr109)
+add_custom_target("hex" DEPENDS ${ODIR}/${ELF}.hex
+	COMMAND ${CMAKE_OBJCOPY} -R .eeprom -O ihex ${ODIR}/${ELF}.obj ${ODIR}/${ELF}.hex
+)
 
-#set(PORT usb)
-set(PORT /dev/ttyACM0)
-
-set(BAUD 57600)
-set(CONF /etc/avrdude.conf)
 
 # target for setting fuses for first-time bootloader use
 add_custom_target("fuses" 
-	COMMAND ${FLASH_UTIL} -c ${PROGRAMMER} -p ${MCU} -P ${PORT} -U lfuse:w:${LFUSE}:m
-	COMMAND ${FLASH_UTIL} -c ${PROGRAMMER} -p ${MCU} -P ${PORT} -U hfuse:w:${HFUSE}:m
-	COMMAND ${FLASH_UTIL} -c ${PROGRAMMER} -p ${MCU} -P ${PORT} -U efuse:w:${EFUSE}:m
+	COMMAND ${FLASH_UTIL} ${AVRDUDE_FLAGS} -U lfuse:w:${LFUSE}:m
+	COMMAND ${FLASH_UTIL} ${AVRDUDE_FLAGS} -U hfuse:w:${HFUSE}:m
+	COMMAND ${FLASH_UTIL} ${AVRDUDE_FLAGS} -U efuse:w:${EFUSE}:m
 )
-
-set(AVRDUDE_FLAGS -F -C ${CONF} -c ${PROGRAMMER} -p ${MCU} -P ${PORT} -b ${BAUD} -v)
 
 # target for testing if flash utility is working
 add_custom_target("avrdude_test" 
 	COMMAND ${FLASH_UTIL} ${AVRDUDE_FLAGS}
 )
 
-# target for uploading built code to MCU
-set(ODIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-add_custom_target("upload" DEPENDS ${ODIR}/${ELF}.obj
-	COMMAND ${CMAKE_OBJCOPY} -R .eeprom -O ihex ${ODIR}/${ELF}.obj ${ODIR}/${ELF}.hex
+add_custom_target("upload" DEPENDS ${ODIR}/${ELF}.hex
+# "upload" DEPENDS ${ODIR}/${ELF}.obj
+#	COMMAND ${CMAKE_OBJCOPY} -R .eeprom -O ihex ${ODIR}/${ELF}.obj ${ODIR}/${ELF}.hex
 	COMMAND ${FLASH_UTIL} ${AVRDUDE_FLAGS} -D -U flash:w:${ELF}.hex:i
 )
